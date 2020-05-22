@@ -7,6 +7,7 @@ try:
 except ImportError:
     PurePythonRSAKey = CryptographyRSAKey = PyCryptoRSAKey = None
 from jose.constants import ALGORITHMS
+from jose.exceptions import JWEError
 
 from .test_RSA import PRIVATE_KEYS
 
@@ -100,3 +101,24 @@ class TestBackendRsaCompatibility(object):
         key_2 = BackendTo(pem_load, ALGORITHMS.RS256)
 
         assert pem_reference == key_2.to_pem(encoding_save).strip()
+
+    @pytest.mark.parametrize("backend_encrypt", CRYPTO_BACKENDS)
+    @pytest.mark.parametrize("backend_decrypt", CRYPTO_BACKENDS)
+    @pytest.mark.parametrize("algorithm", filter(lambda x: x in ALGORITHMS.SUPPORTED, ALGORITHMS.RSA_KW))
+    @pytest.mark.parametrize("private_key", PRIVATE_KEYS)
+    def test_encryption_parity(self, backend_encrypt, backend_decrypt, private_key, algorithm):
+        if algorithm in (ALGORITHMS.RSA_OAEP, ALGORITHMS.RSA_OAEP_256) \
+                and PurePythonRSAKey in (backend_encrypt, backend_decrypt):
+            pytest.skip("Pure RSA does not support OAEP")
+        key_encrypt = backend_encrypt(private_key, algorithm).public_key()
+        key_decrypt = backend_decrypt(private_key, algorithm)
+
+        plain_text = b'test'
+        _, cipher_text, _ = key_encrypt.encrypt(plain_text)
+
+        # verify decrypt to original plain text
+        actual = key_decrypt.decrypt(cipher_text)
+        assert actual == plain_text
+
+        with pytest.raises(JWEError):
+            key_decrypt.decrypt(b'n' * 64)

@@ -1,6 +1,7 @@
 from __future__ import division
 
 import math
+import os
 
 import six
 
@@ -12,13 +13,15 @@ except ImportError:
 from jose.backends.base import Key
 from jose.utils import base64_to_long, long_to_base64
 from jose.constants import ALGORITHMS
-from jose.exceptions import JWKError
+from jose.exceptions import JWKError, JWEError
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa, padding
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature, encode_dss_signature
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.padding import PKCS7
 from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
 from cryptography.utils import int_from_bytes, int_to_bytes
 from cryptography.x509 import load_pem_x509_certificate
@@ -201,6 +204,11 @@ class CryptographyRSAKey(Key):
     SHA384 = hashes.SHA384
     SHA512 = hashes.SHA512
 
+    RSA1_5 = padding.PKCS1v15()
+    RSA_OAEP = padding.OAEP(padding.MGF1(hashes.SHA1()), hashes.SHA1(), None)
+    RSA_OAEP_256 = padding.OAEP(padding.MGF1(hashes.SHA256()),
+                                hashes.SHA256(), None)
+
     def __init__(self, key, algorithm, cryptography_backend=default_backend):
         if algorithm not in ALGORITHMS.RSA:
             raise JWKError('hash_alg: %s is not a valid hash algorithm' % algorithm)
@@ -211,6 +219,12 @@ class CryptographyRSAKey(Key):
             ALGORITHMS.RS512: self.SHA512
         }.get(algorithm)
         self._algorithm = algorithm
+
+        self.padding = {
+            ALGORITHMS.RSA1_5: self.RSA1_5,
+            ALGORITHMS.RSA_OAEP: self.RSA_OAEP,
+            ALGORITHMS.RSA_OAEP_256: self.RSA_OAEP_256
+        }.get(algorithm)
 
         self.cryptography_backend = cryptography_backend
 
@@ -369,3 +383,133 @@ class CryptographyRSAKey(Key):
             })
 
         return data
+
+    def encrypt(self, plain_text):
+        try:
+            cipher_text = self.prepared_key.encrypt(
+                plain_text,
+                self.padding
+            )
+            return None, cipher_text
+        except Exception as e:
+            raise JWEError(e)
+
+    def decrypt(self, cipher_text, iv=None):
+        try:
+            plain_text = self.prepared_key.decrypt(
+                cipher_text,
+                self.padding
+            )
+            return plain_text
+        except Exception as e:
+            raise JWEError(e)
+
+
+class CryptographyAESKey(Key):
+    ALG_128 = (ALGORITHMS.A128GCM, ALGORITHMS.A128CBC_HS256,
+               ALGORITHMS.A128GCMKW, ALGORITHMS.A128KW)
+    ALG_192 = (ALGORITHMS.A192GCM, ALGORITHMS.A192CBC_HS384,
+               ALGORITHMS.A192GCMKW, ALGORITHMS.A192KW)
+    ALG_256 = (ALGORITHMS.A256GCM, ALGORITHMS.A256CBC_HS512,
+               ALGORITHMS.A256GCMKW, ALGORITHMS.A256KW)
+
+    AES_KW_ALGS = (ALGORITHMS.A128KW, ALGORITHMS.A192KW, ALGORITHMS.A256KW)
+
+    MODES = {
+        ALGORITHMS.A128GCM: modes.GCM,
+        ALGORITHMS.A192GCM: modes.GCM,
+        ALGORITHMS.A256GCM: modes.GCM,
+        ALGORITHMS.A128CBC_HS256: modes.CBC,
+        ALGORITHMS.A192CBC_HS384: modes.CBC,
+        ALGORITHMS.A256CBC_HS512: modes.CBC,
+        ALGORITHMS.A128GCMKW: modes.GCM,
+        ALGORITHMS.A192GCMKW: modes.GCM,
+        ALGORITHMS.A256GCMKW: modes.GCM,
+        ALGORITHMS.A128KW: None,
+        ALGORITHMS.A192KW: None,
+        ALGORITHMS.A256KW: None
+    }
+
+    def __init__(self, key, algorithm):
+        if algorithm not in ALGORITHMS.AES:
+            raise JWKError('%s is not a valid AES algorithm' % algorithm)
+        if algorithm not in ALGORITHMS.SUPPORTED:
+            raise JWKError('%s is not a supported algorithm' % algorithm)
+
+        self._algorithm = algorithm
+        self._mode = self.MODES.get(self._algorithm)
+
+        if algorithm in self.ALG_128 and len(key) != 16:
+            raise JWKError("Key but be 128 bit for alg {}".format(algorithm))
+        elif algorithm in self.ALG_192 and len(key) != 24:
+            raise JWKError("Key but be 192 bit for alg {}".format(algorithm))
+        elif algorithm in self.ALG_256 and len(key) != 32:
+            raise JWKError("Key but be 256 bit for alg {}".format(algorithm))
+
+        self._key = key
+
+    def sign(self, msg):
+        raise NotImplementedError("AES Cannot Sign")
+
+    def verify(self, msg, sig):
+        raise NotImplementedError("AES Cannot Verify")
+
+    def public_key(self):
+        raise NotImplementedError("AES Has no Public Key")
+
+    def to_pem(self):
+        raise NotImplementedError("AES Cannot Convert to PEM")
+
+    def to_dict(self):
+        data = {
+            'alg': self._algorithm,
+            'kty': 'oct',
+        }
+        return data
+
+    def encrypt(self, plain_text, aad=None):
+        plain_text = six.ensure_binary(plain_text)
+        if self._algorithm in self.AES_KW_ALGS:
+            return self._aes_key_wrap(plain_text)
+
+        try:
+            padder = PKCS7(algorithms.AES.block_size).padder()
+            padded_data = padder.update(plain_text)
+            padded_data += padder.finalize()
+
+            iv = six.ensure_binary(os.urandom(16))  # Change to use OpenSSL RAND_bytes
+            mode = self._mode(iv)
+            cipher = Cipher(algorithms.AES(self._key), mode,
+                            backend=default_backend())
+            encryptor = cipher.encryptor()
+            cipher_text = encryptor.update(padded_data)
+            encryptor.finalize()
+            return iv, cipher_text, None
+        except Exception as e:
+            raise JWEError(e)
+
+    def decrypt(self, cipher_text, iv=None, aad=None, tag=None):
+        cipher_text = six.ensure_binary(cipher_text)
+        if self._algorithm in self.AES_KW_ALGS:
+            return self._aes_key_unwrap(cipher_text)
+
+        try:
+            iv = six.ensure_binary(iv)
+            mode = self._mode(iv)
+            cipher = Cipher(algorithms.AES(self._key), mode,
+                            backend=default_backend())
+            decryptor = cipher.decryptor()
+            padded_plain_text = decryptor.update(cipher_text)
+            padded_plain_text += decryptor.finalize()
+            unpadder = PKCS7(algorithms.AES.block_size).unpadder()
+            plain_text = unpadder.update(padded_plain_text)
+            plain_text += unpadder.finalize()
+            return plain_text
+        except Exception as e:
+            raise JWEError(e)
+
+    def _aes_key_wrap(self, plain_text):
+        raise NotImplementedError("AES Key Wrap no implemented")
+
+    def _aes_key_unwrap(self, cipher_text):
+        raise NotImplementedError("AES Key Wrap not implemented")

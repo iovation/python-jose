@@ -7,6 +7,7 @@ from pyasn1.error import PyAsn1Error
 
 import rsa as pyrsa
 import rsa.pem as pyrsa_pem
+from rsa import DecryptionError
 
 from jose.backends.base import Key
 from jose.backends._asn1 import (
@@ -15,7 +16,7 @@ from jose.backends._asn1 import (
     rsa_public_key_pkcs1_to_pkcs8,
 )
 from jose.constants import ALGORITHMS
-from jose.exceptions import JWKError
+from jose.exceptions import JWKError, JWEError
 from jose.utils import base64_to_long, long_to_base64
 
 
@@ -126,6 +127,10 @@ class RSAKey(Key):
     def __init__(self, key, algorithm):
         if algorithm not in ALGORITHMS.RSA:
             raise JWKError('hash_alg: %s is not a valid hash algorithm' % algorithm)
+
+        if algorithm in ALGORITHMS.RSA_KW and algorithm != ALGORITHMS.RSA1_5:
+            raise JWKError(
+                'alg: %s is not supported by the RSA backend' % algorithm)
 
         self.hash_alg = {
             ALGORITHMS.RS256: self.SHA256,
@@ -266,3 +271,17 @@ class RSAKey(Key):
             })
 
         return data
+
+    def encrypt(self, plain_text, aad=None):
+        if not self.is_public():
+            warnings.warn("Attempting to encrypt a message with a private key."
+                          " This is not recommended.")
+        cipher_text = pyrsa.encrypt(plain_text, self._prepared_key)
+        return None, cipher_text, None
+
+    def decrypt(self, cipher_text, iv=None, aad=None, tag=None):
+        try:
+            plain_text = pyrsa.decrypt(cipher_text, self._prepared_key)
+        except DecryptionError as e:
+            raise JWEError(e)
+        return plain_text
