@@ -66,7 +66,7 @@ def decrypt(jwe_str, key):
 
     Examples:
         >>> from jose import jwe
-        >>> jwe_string = 'eyJhbGciOiJIUzI1N.6IkpXVCJ9.eyJhIjoiYiJ9.QgmxZ5yq8z0lXS67_QG.s52AzC8Ru8'
+        >>> jwe_string = 'eyJhbGciOiJIUzI1N.6IkpXVCJ9.eyJhIjoiYiJ9. QgmxZ5yq8z0lXS67_QG.s52AzC8Ru8'
         >>> jwe.decrypt(jwe_string, 'secret')
         b'Hello, World!'
     """

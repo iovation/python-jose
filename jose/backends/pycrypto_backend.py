@@ -300,18 +300,6 @@ class AESKey(Key):
 
         self._key = key
 
-    def sign(self, msg):
-        raise NotImplementedError("AES Cannot Sign")
-
-    def verify(self, msg, sig):
-        raise NotImplementedError("AES Cannot Verify")
-
-    def public_key(self):
-        raise NotImplementedError("AES Has no Public Key")
-
-    def to_pem(self):
-        raise NotImplementedError("AES Cannot Convert to PEM")
-
     def to_dict(self):
         data = {
             'alg': self._algorithm,
