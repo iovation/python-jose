@@ -30,6 +30,10 @@ else:
     _RSAKey = RSA._RSAobj
 
 
+def get_random_bytes(num_bytes):
+    return bytes(Random.new().read(num_bytes))
+
+
 def _der_to_pem(der_key, marker):
     """
     Perform a simple DER to PEM conversion.
@@ -228,7 +232,7 @@ class RSAKey(Key):
 
         return data
 
-    def encrypt(self, plain_text):
+    def encrypt(self, plain_text, aad=None):
         try:
             if self._algorithm == ALGORITHMS.RSA1_5:
                 cipher = PKCS1_v1_5_Cipher.new(self.prepared_key)
@@ -239,9 +243,9 @@ class RSAKey(Key):
         except Exception as e:
             raise JWKError(e)
 
-    def decrypt(self, cipher_text, iv=None):
+    def decrypt(self, cipher_text, iv=None, aad=None, tag=None):
         try:
-            if self.hash_alg == ALGORITHMS.RSA1_5:
+            if self._algorithm == ALGORITHMS.RSA1_5:
                 sentinel = Random.new().read(32)
                 cipher = PKCS1_v1_5_Cipher.new(self.prepared_key)
                 plain_text = cipher.decrypt(cipher_text, sentinel)
@@ -267,6 +271,9 @@ class AESKey(Key):
         ALGORITHMS.A128CBC_HS256: AES.MODE_CBC,
         ALGORITHMS.A192CBC_HS384: AES.MODE_CBC,
         ALGORITHMS.A256CBC_HS512: AES.MODE_CBC,
+        ALGORITHMS.A128CBC: AES.MODE_CBC,
+        ALGORITHMS.A192CBC: AES.MODE_CBC,
+        ALGORITHMS.A256CBC: AES.MODE_CBC,
         ALGORITHMS.A128KW: None,
         ALGORITHMS.A192KW: None,
         ALGORITHMS.A256KW: None
@@ -285,7 +292,7 @@ class AESKey(Key):
     def __init__(self, key, algorithm):
         if algorithm not in ALGORITHMS.AES:
             raise JWKError('%s is not a valid AES algorithm' % algorithm)
-        if algorithm not in ALGORITHMS.SUPPORTED:
+        if algorithm not in ALGORITHMS.SUPPORTED.union(ALGORITHMS.AES_PSEUDO):
             raise JWKError('%s is not a supported algorithm' % algorithm)
 
         self._algorithm = algorithm
@@ -304,6 +311,7 @@ class AESKey(Key):
         data = {
             'alg': self._algorithm,
             'kty': 'oct',
+            'k': self._key
         }
         return data
 
@@ -312,7 +320,7 @@ class AESKey(Key):
         if self._algorithm in self.AES_KW_ALGS:
             return self._aes_key_wrap(plain_text)
         try:
-            iv = Random.new().read(AES.block_size)
+            iv = get_random_bytes(AES.block_size)
             cipher = AES.new(self._key, self._mode, iv)
             padded_plain_text = self._pad(AES.block_size, plain_text)
             cipher_text = cipher.encrypt(padded_plain_text)
@@ -339,9 +347,10 @@ class AESKey(Key):
     def _aes_key_unwrap(self, cipher_text):
         raise NotImplementedError("AES Key Wrap not implemented")
 
-    def _pad(self, bytes, unpadded):
-        padding_bytes = bytes - len(unpadded) % bytes
-        return unpadded + bytearray([padding_bytes]) * padding_bytes
+    def _pad(self, block_size, unpadded):
+        padding_bytes = block_size - len(unpadded) % block_size
+        padding = bytes(bytearray([padding_bytes]) * padding_bytes)
+        return unpadded + padding
 
     def _unpad(self, padded):
         padded = six.ensure_binary(padded)

@@ -13,8 +13,7 @@ CRYPTO_BACKENDS = (
     pytest.param(PyCryptoAESKey, id="pycrypto/dome"),
 )
 
-SUPPORTED_ALGORITHMS = filter(lambda x: x in ALGORITHMS.SUPPORTED,
-                              ALGORITHMS.AES_ENC)
+SUPPORTED_ALGORITHMS = ALGORITHMS.AES_PSEUDO
 
 
 @pytest.mark.backend_compatibility

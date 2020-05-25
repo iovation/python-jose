@@ -1,3 +1,6 @@
+from ..utils import base64url_encode
+
+
 class Key(object):
     """
     A simple interface for implementing JWK keys.
@@ -22,12 +25,14 @@ class Key(object):
 
     def encrypt(self, plain_text, aad=None):
         """
-        :param plain_text: Data to encrypt
-        :type plain_text: bytes
-        :param aad: Authenticated Additional Data if auth mode
-        :type aad: bytes
-        :return: IV if block mode, cipher text, and auth tag if mode supports
-        :rtype: tuple[bytes, bytes, bytes]
+        Encrypt the plain text and generate an auth tag if appropriate
+
+        Args:
+            plain_text (bytes): Data to encrypt
+            aad (bytes, optional): Authenticated Additional Data if key's algorithm supports auth mode
+
+        Returns:
+            (bytes, bytes, bytes): IV, cipher text, and auth tag
         """
         raise NotImplementedError()
 
@@ -37,7 +42,7 @@ class Key(object):
         :type cipher_text: bytes
         :param iv: IV if block mode
         :type iv: bytes
-        :param aad: Authenticated Additional Data to verify if auth mode
+        :param aad: Additional Authenticated Data to verify if auth mode
         :type aad: bytes
         :param tag: Authentication tag if auth mode
         :type tag: bytes
@@ -45,3 +50,16 @@ class Key(object):
         :rtype: bytes
         """
         raise NotImplementedError()
+
+
+class DIRKey(Key):
+    def __init__(self, key_data, algorithm):
+        self._key = key_data
+        self._alg = algorithm
+
+    def to_dict(self):
+        return {
+            'alg': self._alg,
+            'kty': 'oct',
+            'k': base64url_encode(self._key),
+        }

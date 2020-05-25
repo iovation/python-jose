@@ -37,6 +37,9 @@ def get_key(algorithm):
     elif algorithm in ALGORITHMS.AES:
         from jose.backends import AESKey  # noqa: F811
         return AESKey
+    elif algorithm == ALGORITHMS.DIR:
+        from jose.backends import DIRKey  # noqa: F811
+        return DIRKey
     return None
 
 

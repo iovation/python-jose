@@ -22,6 +22,11 @@ class Algorithms(object):
     A192GCM = "A192GCM"
     A256GCM = "A256GCM"
 
+    # Pseudo algorithm for encryption
+    A128CBC = "A128CBC"
+    A192CBC = "A192CBC"
+    A256CBC = "A256CBC"
+
     # CEK Encryption Algorithms
     DIR = 'dir'
     RSA1_5 = 'RSA1_5'
@@ -51,14 +56,19 @@ class Algorithms(object):
     EC_DS = {ES256, ES384, ES512}
     EC_KW = {ECDH_ES, ECDH_ES_A128KW, ECDH_ES_A192KW, ECDH_ES_A256KW}
     EC = EC_DS.union(EC_KW)
+    AES_PSEUDO = {A128CBC, A192CBC, A256CBC}
     AES_ENC = {A128CBC_HS256, A192CBC_HS384, A256CBC_HS512,
-               A128GCM, A192GCM, A256GCM}
+               A128GCM, A192GCM, A256GCM}.union(AES_PSEUDO)
     AES_KW = {A128KW, A192KW, A256KW, A128GCMKW, A192GCMKW, A256GCMKW}
     AES = AES_ENC.union(AES_KW)
     PBES2_KW = {PBES2_HS256_A128KW, PBES2_HS384_A192KW, PBES2_HS512_A256KW}
 
+    HMAC_AUTH_TAG = {A128CBC_HS256, A192CBC_HS384, A256CBC_HS512}.union(PBES2_KW)
+    GCM = {A128GCM, A192GCM, A256GCM}
+
     SUPPORTED = HMAC.union(RSA_DS).union(EC_DS).union([DIR]) \
-        .union([A128CBC_HS256, A192CBC_HS384, A256CBC_HS512])
+        .union([A128CBC_HS256, A192CBC_HS384, A256CBC_HS512]) \
+        .union(RSA_KW)
 
     ALL = SUPPORTED.union([NONE]).union(RSA_KW).union(AES_KW) \
         .union(EC_KW).union(PBES2_KW)
@@ -79,3 +89,12 @@ class Algorithms(object):
 
 
 ALGORITHMS = Algorithms()
+
+
+class Zips(object):
+    DEF = "DEF"
+    NONE = None
+    SUPPORTED = {DEF, NONE}
+
+
+ZIPS = Zips()
