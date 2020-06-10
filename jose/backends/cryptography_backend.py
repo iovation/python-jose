@@ -31,10 +31,8 @@ from cryptography.hazmat.primitives.serialization import \
 from cryptography.utils import int_from_bytes, int_to_bytes
 from cryptography.x509 import load_pem_x509_certificate
 
-_binding = None
 
-
-def get_random_bytes(num_bytes):
+def get_random_bytes(num_bytes, cryptography_backend=default_backend):
     """
     Get random bytes
 
@@ -46,14 +44,12 @@ def get_random_bytes(num_bytes):
     Returns:
         bytes: Random bytes
     """
-    global _binding
 
-    if _binding is None:
-        _binding = Binding()
+    backend = cryptography_backend()
 
-    buf = _binding.ffi.new("char[]", num_bytes)
-    _binding.lib.RAND_bytes(buf, num_bytes)
-    rand_bytes = _binding.ffi.buffer(buf, num_bytes)[:]
+    buf = backend._ffi.new("char[]", num_bytes)
+    backend._lib.RAND_bytes(buf, num_bytes)
+    rand_bytes = backend._ffi.buffer(buf, num_bytes)[:]
     return rand_bytes
 
 
