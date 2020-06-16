@@ -46,7 +46,7 @@ install_requires += legacy_backend_requires
 
 
 setup(
-    name='python-jose',
+    name='lk-python-jose',
     author='Michael Davis',
     author_email='mike.philip.davis@gmail.com',
     description='JOSE implementation in Python',
